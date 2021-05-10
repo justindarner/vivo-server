@@ -7,7 +7,8 @@ phases:
   build:
     commands:
       - npm run build
+      - cp -R dist/ .
 artifacts:
   files:
-    - "**/*"
-  base-directory: "./dist/"
+    - "server.js"
+    - "node_modules/**/*"
