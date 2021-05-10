@@ -7,7 +7,7 @@ phases:
   build:
     commands:
       - npm run build
-      - cp server.js .
+      - cp dist/server.js server.js
 artifacts:
   files:
     - "server.js"
