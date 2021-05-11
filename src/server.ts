@@ -1,25 +1,26 @@
 import express from "express";
 import cors from "cors";
 import * as http from "http";
-import { Socket } from "socket.io";
-import bodyParser from "body-parser";
-import socketIo from "socket.io";
+
+const io = require("socket.io")({
+  serveClient: false,
+  cors: {
+    origin: "*",
+  },
+});
 
 interface Message<T, P> {
   type: T;
-  groupId: string;
   payload: P;
 }
 
-type JoinGroupMessage = Message<"JoinGroup", undefined>;
-type GroupMessage = Message<"GroupMessage", unknown>;
+type JoinGroupMessage = Message<"JoinGroup", { groupId: string }>;
+type LeaveGroupMessage = Message<"LeaveGroup", undefined>;
+type GroupMessage = Message<"GroupMessage", { groupId: string }>;
 
-type Messages = JoinGroupMessage | GroupMessage;
+type Messages = JoinGroupMessage | GroupMessage | LeaveGroupMessage;
 
 const app = express();
-const server = http.createServer(app);
-
-const io = require("socket.io").listen(server, { origins: "*:*" });
 
 // @ts-ignore
 app.options("*", cors());
@@ -37,37 +38,57 @@ app.use((err, req, res, next) => {
 
 const groups = {} as Record<string, unknown[] | undefined>;
 
-io.on("connect", (socket: any) => {
-  socket.on("message", (m: Messages) => {
-    if (m.type === "JoinGroup") {
-      if (!groups[m.groupId]) {
-        groups[m.groupId] = [];
-      }
+const joinGroup = (socket: unknown, m: JoinGroupMessage) => {
+  if (!groups[m.payload.groupId]) {
+    groups[m.payload.groupId] = [];
+  }
 
-      const group = groups[m.groupId]!;
-      group.push(socket);
+  const group = groups[m.payload.groupId]!;
+  group.push(socket);
+};
+
+const leaveGroup = (socket: unknown) => {
+  for (const [key, group] of Object.entries(groups)) {
+    let filteredGroup = group?.filter((_socket) => _socket === socket) || [];
+    if (filteredGroup.length === 0) {
+      delete groups[key];
+    } else {
+      groups[key] = filteredGroup;
     }
+  }
+};
 
-    if (m.type === "GroupMessage") {
-      const sockets = groups[m.groupId] || [];
-      sockets.forEach((peer: any) => {
-        if (socket !== peer) {
-          peer.send(m);
-        }
-      });
+const onGroupMessage = (socket: unknown, m: GroupMessage) => {
+  const sockets = groups[m.payload.groupId] || [];
+  sockets.forEach((peer: any) => {
+    if (socket !== peer) {
+      peer.send(m);
     }
   });
+};
 
-  socket.on("disconnect", (t: any) => {
-    for (const [key, group] of Object.entries(groups)) {
-      let filteredGroup = group?.filter((socket) => socket === t) || [];
-      if (filteredGroup.length === 0) {
-        delete groups[key];
-      } else {
-        groups[key] = filteredGroup;
+const server = http.createServer(app);
+io.attach(server);
+
+server.listen(process.env.PORT || 3000, () => {
+  io.on("connect", (socket: any) => {
+    socket.on("message", (m: Messages) => {
+      switch (m.type) {
+        case "JoinGroup":
+          leaveGroup(socket);
+          joinGroup(socket, m);
+          break;
+        case "LeaveGroup":
+          leaveGroup(socket);
+          break;
+        case "GroupMessage":
+          onGroupMessage(socket, m);
+          break;
       }
-    }
+    });
+
+    socket.on("disconnect", (t: any) => {
+      leaveGroup(t);
+    });
   });
 });
-
-server.listen(process.env.PORT || 3000);
