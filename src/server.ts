@@ -30,6 +30,23 @@ app.get("/", (req, res) => {
   res.send({ ok: true });
 });
 
+app.post('/groups/:id/message', express.json(), (req, res, next) => {
+  const groupId = req.params.id;
+  const message = req.body as GroupMessage['payload'];
+  const count = onGroupMessage({}, {
+    type: 'GroupMessage',
+    payload: {
+      ...message,
+      groupId,
+    }
+  });
+
+  res.send({
+    sentTo: count
+  });
+
+});
+
 // @ts-ignore
 app.use((err, req, res, next) => {
   const { status, ...body } = err;
@@ -58,13 +75,16 @@ const leaveGroup = (socket: unknown) => {
   }
 };
 
-const onGroupMessage = (socket: unknown, m: GroupMessage) => {
+const onGroupMessage = (socket: unknown, m: GroupMessage): number => {
   const sockets = groups[m.payload.groupId] || [];
+  let count = 0;
   sockets.forEach((peer: any) => {
     if (socket !== peer) {
       peer.send(m);
+      count += 1;
     }
   });
+  return count;
 };
 
 const server = http.createServer(app);
