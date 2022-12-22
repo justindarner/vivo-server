@@ -11,6 +11,7 @@ const io = require("socket.io")({
 
 interface Message<T, P> {
   type: T;
+  subtype?: string;
   payload: P;
 }
 
@@ -32,9 +33,10 @@ app.get("/", (req, res) => {
 
 app.post('/groups/:id/message', express.json(), (req, res, next) => {
   const groupId = req.params.id;
-  const message = req.body as GroupMessage['payload'];
+  const { subtype, ...message } = req.body as Exclude<GroupMessage, 'type'>;
   const count = onGroupMessage({}, {
     type: 'GroupMessage',
+    subtype,
     payload: {
       ...message,
       groupId,
