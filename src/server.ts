@@ -38,7 +38,7 @@ app.post('/groups/:id/message', express.json(), (req, res, next) => {
     type: 'GroupMessage',
     subtype,
     payload: {
-      ...message,
+      ...message.payload,
       groupId,
     }
   });
