@@ -9,15 +9,25 @@ const io = require("socket.io")({
   },
 });
 
-interface Message<T, P> {
-  type: T;
-  subtype?: string;
-  payload: P;
+interface BaseMessage {
+  type: string;
+  groupId: string;
 }
 
-type JoinGroupMessage = Message<"JoinGroup", { groupId: string }>;
-type LeaveGroupMessage = Message<"LeaveGroup", undefined>;
-type GroupMessage = Message<"GroupMessage", { groupId: string }>;
+interface JoinGroupMessage extends BaseMessage  {
+  type: "JoinGroup";
+}
+
+interface LeaveGroupMessage extends BaseMessage {
+  type: "LeaveGroup";
+}
+
+interface GroupMessage extends BaseMessage  {
+  type: "GroupMessage",
+  subtype: string;
+  payload: unknown 
+}
+
 
 type Messages = JoinGroupMessage | GroupMessage | LeaveGroupMessage;
 
@@ -33,14 +43,12 @@ app.get("/", (req, res) => {
 
 app.post('/groups/:id/message', express.json(), (req, res, next) => {
   const groupId = req.params.id;
-  const { subtype, ...message } = req.body as Exclude<GroupMessage, 'type'>;
+  const { subtype, payload } = req.body as Exclude<GroupMessage, 'type'>;
   const count = onGroupMessage({}, {
     type: 'GroupMessage',
     subtype,
-    payload: {
-      ...message.payload,
-      groupId,
-    }
+    groupId,
+    payload,
   });
 
   res.send({
@@ -58,11 +66,11 @@ app.use((err, req, res, next) => {
 const groups = {} as Record<string, unknown[] | undefined>;
 
 const joinGroup = (socket: unknown, m: JoinGroupMessage) => {
-  if (!groups[m.payload.groupId]) {
-    groups[m.payload.groupId] = [];
+  if (!groups[m.groupId]) {
+    groups[m.groupId] = [];
   }
 
-  const group = groups[m.payload.groupId]!;
+  const group = groups[m.groupId]!;
   group.push(socket);
 };
 
@@ -78,7 +86,7 @@ const leaveGroup = (socket: unknown) => {
 };
 
 const onGroupMessage = (socket: unknown, m: GroupMessage): number => {
-  const sockets = groups[m.payload.groupId] || [];
+  const sockets = groups[m.groupId] || [];
   let count = 0;
   sockets.forEach((peer: any) => {
     if (socket !== peer) {
