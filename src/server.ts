@@ -78,12 +78,13 @@ const joinGroup = (socketId: string, m: JoinGroupMessage) => {
 };
 
 const leaveGroup = (socketId: string) => {
-  for (const [key, socketIds] of Object.entries(groups)) {
-    let filteredGroup = socketIds?.filter((id) => id === socketId) || [];
+  for (const groupId in groups) {
+    const socketIds = groups[groupId]
+    let filteredGroup = socketIds?.filter((id) => id !== socketId) || [];
     if (filteredGroup.length === 0) {
-      delete groups[key];
+      delete groups[groupId];
     } else {
-      groups[key] = filteredGroup;
+      groups[groupId] = filteredGroup;
     }
   }
 };
