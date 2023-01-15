@@ -5,6 +5,10 @@
     "outDir": "./dist",
     "strict": true,
     "esModuleInterop": true,
-    "strictPropertyInitialization": false
-  }
+    "strictPropertyInitialization": false,
+    "skipLibCheck": true,
+    "typeRoots": ["node_modules/@types"]
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"]
 }
