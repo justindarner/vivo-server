@@ -42,6 +42,10 @@ app.get("/", (req, res) => {
   res.send({ ok: true });
 });
 
+app.get("/groups", (req, res) => {
+  res.send(groups);
+});
+
 app.post('/groups/:id/message', express.json(), (req, res, next) => {
   const groupId = req.params.id;
   const { subtype, payload } = req.body as Exclude<GroupMessage, 'type'>;
@@ -67,11 +71,9 @@ app.use((err, req, res, next) => {
 const groups = {} as Record<string, string[] | undefined>;
 
 const joinGroup = (socketId: string, m: JoinGroupMessage) => {
-  if (!groups[m.groupId]) {
-    groups[m.groupId] = [];
-  }
 
-  const group = groups[m.groupId]!;
+  const group = groups[m.groupId] || [];
+  groups[m.groupId] = group;
   group.push(socketId);
 };
 
