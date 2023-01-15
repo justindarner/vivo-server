@@ -1,8 +1,9 @@
 import express from "express";
 import cors from "cors";
 import * as http from "http";
+import { Server, Socket } from 'socket.io';
 
-const io = require("socket.io")({
+const io = new Server({
   serveClient: false,
   cors: {
     origin: "*",
@@ -44,7 +45,7 @@ app.get("/", (req, res) => {
 app.post('/groups/:id/message', express.json(), (req, res, next) => {
   const groupId = req.params.id;
   const { subtype, payload } = req.body as Exclude<GroupMessage, 'type'>;
-  const count = onGroupMessage({}, {
+  const count = onGroupMessage({
     type: 'GroupMessage',
     subtype,
     groupId,
@@ -63,20 +64,20 @@ app.use((err, req, res, next) => {
   res.status(status || 500).send(body);
 });
 
-const groups = {} as Record<string, unknown[] | undefined>;
+const groups = {} as Record<string, string[] | undefined>;
 
-const joinGroup = (socket: unknown, m: JoinGroupMessage) => {
+const joinGroup = (socketId: string, m: JoinGroupMessage) => {
   if (!groups[m.groupId]) {
     groups[m.groupId] = [];
   }
 
   const group = groups[m.groupId]!;
-  group.push(socket);
+  group.push(socketId);
 };
 
-const leaveGroup = (socket: unknown) => {
-  for (const [key, group] of Object.entries(groups)) {
-    let filteredGroup = group?.filter((_socket) => _socket === socket) || [];
+const leaveGroup = (socketId: string) => {
+  for (const [key, socketIds] of Object.entries(groups)) {
+    let filteredGroup = socketIds?.filter((id) => id === socketId) || [];
     if (filteredGroup.length === 0) {
       delete groups[key];
     } else {
@@ -85,14 +86,12 @@ const leaveGroup = (socket: unknown) => {
   }
 };
 
-const onGroupMessage = (socket: unknown, m: GroupMessage): number => {
-  const sockets = groups[m.groupId] || [];
+const onGroupMessage = (m: GroupMessage, fromSocketId?: string): number => {
   let count = 0;
-  sockets.forEach((peer: any) => {
-    if (socket !== peer) {
-      peer.send(m);
-      count += 1;
-    }
+  const sockets = groups[m.groupId]?.filter(id => id !== fromSocketId) || []
+  sockets.forEach( id => {
+    io.sockets.sockets.get(id)?.send(m);
+    count += 1;
   });
   return count;
 };
@@ -101,24 +100,25 @@ const server = http.createServer(app);
 io.attach(server);
 
 server.listen(process.env.PORT || 3000, () => {
-  io.on("connect", (socket: any) => {
+  io.on("connect", (socket) => {
+    const socketId = socket.id;
     socket.on("message", (m: Messages) => {
       switch (m.type) {
         case "JoinGroup":
-          leaveGroup(socket);
-          joinGroup(socket, m);
+          leaveGroup(socketId);
+          joinGroup(socketId, m);
           break;
         case "LeaveGroup":
-          leaveGroup(socket);
+          leaveGroup(socketId);
           break;
         case "GroupMessage":
-          onGroupMessage(socket, m);
+          onGroupMessage(m, socketId);
           break;
       }
     });
 
-    socket.on("disconnect", (t: any) => {
-      leaveGroup(t);
+    socket.on("disconnect", () => {
+      leaveGroup(socketId);
     });
   });
 });
